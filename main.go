@@ -90,8 +90,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		common.Spinner = s
 		cmds = append(cmds, cmd)
 
-	case signal.UserName:
-		common.UserName = string(msg)
+	case signal.UserInfo:
+		common.UserName = msg.Name
+		common.Token = msg.Token
+
 		m.state = mainMenuState
 		m.homeModel, cmd = m.homeModel.Update(signal.Refetch("all"))
 		cmds = append(cmds, cmd)

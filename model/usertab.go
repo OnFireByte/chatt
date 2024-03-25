@@ -139,7 +139,7 @@ func (m UserListTab) View() string {
 		tabStyle = design.Tab
 	}
 
-	items := make([]string, min(len(m.data)+1, m.height-3))
+	items := make([]string, max(min(len(m.data)+1, m.height-3), 2))
 
 	title := m.title
 	if m.loading {

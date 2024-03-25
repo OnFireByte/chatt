@@ -8,10 +8,11 @@ import (
 	lip "github.com/charmbracelet/lipgloss"
 	"github.com/onfirebyte/chatt/common"
 	"github.com/onfirebyte/chatt/design"
+	"github.com/onfirebyte/chatt/dto"
 	"github.com/onfirebyte/chatt/signal"
 )
 
-type RoomListResult signal.Result[[]string]
+type RoomListResult signal.Result[[]dto.Room]
 
 type RoomListTab struct {
 	title   string
@@ -21,27 +22,35 @@ type RoomListTab struct {
 	idx     int
 	loading bool
 
-	textInput textinput.Model
-	inputMode bool
+	textInput         textinput.Model
+	roomPasswordInput textinput.Model
+	inputMode         bool
 
 	offset int
 
-	data      []string
+	data      []dto.Room
 	error     error
-	fetchFunc func() ([]string, error)
+	fetchFunc func() ([]dto.Room, error)
 }
 
-func NewRoomListTabModel(name string, fetchFunc func() ([]string, error)) RoomListTab {
+func NewRoomListTabModel(name string, fetchFunc func() ([]dto.Room, error)) RoomListTab {
 	ti := textinput.New()
 	ti.Placeholder = "Create a room..."
 	ti.Blur()
 	ti.CharLimit = 16
 	ti.Width = 14
 
+	pi := textinput.New()
+	pi.Placeholder = "Room Password..."
+	pi.Blur()
+	pi.CharLimit = 16
+	pi.Width = 14
+
 	return RoomListTab{
-		title:     name,
-		fetchFunc: fetchFunc,
-		textInput: ti,
+		title:             name,
+		fetchFunc:         fetchFunc,
+		textInput:         ti,
+		roomPasswordInput: pi,
 	}
 }
 
@@ -49,7 +58,7 @@ func (m RoomListTab) Init() tea.Cmd {
 	return func() tea.Msg {
 		if m.fetchFunc == nil {
 			return RoomListResult{
-				Value: []string{},
+				Value: nil,
 				Err:   nil,
 			}
 		}
@@ -72,27 +81,19 @@ func (m RoomListTab) Update(msg tea.Msg) (RoomListTab, tea.Cmd) {
 	case signal.HomeTabSelected:
 		m.focus = bool(msg)
 		if m.focus {
-			m.textInput.Focus()
+			cmd = m.textInput.Focus()
+			m.roomPasswordInput.Blur()
+			cmds = append(cmds, cmd)
 		} else {
 			m.inputMode = false
 			m.textInput.Blur()
 			m.textInput.SetValue("")
 		}
 	case tea.KeyMsg:
-		if msg.String() == "r" && m.focus && m.fetchFunc != nil {
-			m.loading = true
-			return m, func() tea.Msg {
-				res, err := m.fetchFunc()
-				return RoomListResult{
-					Value: res,
-					Err:   err,
-				}
-			}
-		}
 
 		switch msg.String() {
 		case "r":
-			if m.focus && m.fetchFunc != nil {
+			if m.focus && m.fetchFunc != nil && !m.textInput.Focused() && !m.roomPasswordInput.Focused() {
 				return m, func() tea.Msg {
 					res, err := m.fetchFunc()
 					return RoomListResult{
@@ -118,7 +119,7 @@ func (m RoomListTab) Update(msg tea.Msg) (RoomListTab, tea.Cmd) {
 				}
 			}
 		case "n":
-			if m.focus && !m.inputMode {
+			if m.focus && !m.inputMode && !m.roomPasswordInput.Focused() {
 				m.inputMode = true
 				m.textInput.Blur()
 			}
@@ -128,28 +129,51 @@ func (m RoomListTab) Update(msg tea.Msg) (RoomListTab, tea.Cmd) {
 				m.inputMode = false
 				m.textInput.Blur()
 				m.textInput.SetValue("")
+			} else if m.roomPasswordInput.Focused() {
+				m.roomPasswordInput.Blur()
+				m.roomPasswordInput.SetValue("")
 			}
 		case "enter":
 			if !m.focus {
 				break
 			}
-			var val string
+			var data dto.Room
+			var roomName string
 			if m.inputMode {
-				val = m.textInput.Value()
+				roomName = m.textInput.Value()
 				m.inputMode = false
 				m.textInput.Blur()
 				m.textInput.SetValue("")
 			} else {
-				val = m.data[m.idx+m.offset]
+				data = m.data[m.idx+m.offset]
+				roomName = data.Name
 			}
-
-			cmds = append(cmds,
-				func() tea.Msg {
-					return signal.Connect{
-						IsRoom: true,
-						Value:  val,
-					}
-				})
+			if !data.Lock {
+				cmds = append(cmds,
+					func() tea.Msg {
+						return signal.Connect{
+							IsRoom: true,
+							Value:  roomName,
+						}
+					})
+			} else if m.roomPasswordInput.Focused() {
+				roomPassword := m.roomPasswordInput.Value()
+				m.roomPasswordInput.Blur()
+				m.roomPasswordInput.SetValue("")
+				cmds = append(cmds,
+					func() tea.Msg {
+						return signal.Connect{
+							IsRoom:   true,
+							Value:    roomName,
+							Password: roomPassword,
+						}
+					})
+			} else {
+				cmd = m.roomPasswordInput.Focus()
+				cmds = append(cmds, cmd)
+				m.inputMode = false
+				m.textInput.Blur()
+			}
 		}
 
 	case RoomListResult:
@@ -175,6 +199,12 @@ func (m RoomListTab) Update(msg tea.Msg) (RoomListTab, tea.Cmd) {
 		m.textInput, cmd = m.textInput.Update(msg)
 		cmds = append(cmds, cmd)
 		cmd = m.textInput.Focus()
+		m.roomPasswordInput.Blur()
+		cmds = append(cmds, cmd)
+	}
+
+	if m.roomPasswordInput.Focused() {
+		m.roomPasswordInput, cmd = m.roomPasswordInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -203,7 +233,11 @@ func (m RoomListTab) View() string {
 		items[1] = design.ErrorText.Render(m.error.Error())
 	} else {
 		for i := 0; i < maxLen; i++ {
-			v := m.data[i+m.offset]
+			data := m.data[i+m.offset]
+			v := data.Name
+			if data.Lock {
+				v += " 🔒"
+			}
 			if i == m.idx && m.focus {
 				v = lip.NewStyle().Foreground(design.Special).Bold(true).Render(fmt.Sprintf("▶ %s", v))
 			}
@@ -217,6 +251,10 @@ func (m RoomListTab) View() string {
 		} else {
 			items[len(items)-1] = m.textInput.View()
 		}
+	}
+
+	if m.roomPasswordInput.Focused() {
+		items[len(items)-1] = m.roomPasswordInput.View()
 	}
 
 	return tabStyle.

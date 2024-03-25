@@ -5,7 +5,10 @@ type Result[U any] struct {
 	Err   error
 }
 
-type UserName string
+type UserInfo struct {
+	Name  string
+	Token string
+}
 
 type Size struct {
 	Width  int
@@ -19,4 +22,5 @@ type Refetch string
 type Connect struct {
 	IsRoom bool
 	Value  string
+	Password string
 }

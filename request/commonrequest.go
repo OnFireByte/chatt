@@ -3,15 +3,17 @@ package request
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"sort"
 
 	"github.com/onfirebyte/chatt/common"
+	"github.com/onfirebyte/chatt/dto"
 )
 
-func CreateUser(name string) error {
+func CreateUser(name string, password string) (string, error) {
 	reqUrl, err := url.Parse(common.URL)
 	if err != nil {
 		log.Println(err)
@@ -21,25 +23,34 @@ func CreateUser(name string) error {
 
 	q := reqUrl.Query()
 	q.Set("user", name)
+	q.Set("password", password)
 	reqUrl.RawQuery = q.Encode()
 
 	resp, err := http.Post(reqUrl.String(), "application/json", nil)
 	if err != nil {
 		log.Println(err)
-		return err
+		return "", err
 	}
 
 	defer resp.Body.Close()
-	var body []byte
 
-	resp.Body.Read(body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+	log.Println("BODY", string(body))
 
 	// check if status code is 2xx
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("Error: %s", string(body))
+		if resp.StatusCode == http.StatusUnauthorized {
+			return "", fmt.Errorf("Please provide a valid password")
+		}
+		return "", fmt.Errorf("Error: %s", string(body))
 	}
 
-	return nil
+	log.Println("Token acquired", string(body))
+	return string(body), nil
 }
 
 func GetAllUsers() ([]string, error) {
@@ -58,7 +69,7 @@ func GetAllUsers() ([]string, error) {
 	return res, err
 }
 
-func GetAllRooms() ([]string, error) {
+func GetAllRooms() ([]dto.Room, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/rooms", common.URL))
 	if err != nil {
 		return nil, err
@@ -66,10 +77,12 @@ func GetAllRooms() ([]string, error) {
 
 	defer resp.Body.Close()
 
-	var res []string
+	var res []dto.Room
 	err = json.NewDecoder(resp.Body).Decode(&res)
 
-	sort.Strings(res)
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Name < res[j].Name
+	})
 
 	return res, err
 }

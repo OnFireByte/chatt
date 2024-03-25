@@ -13,6 +13,8 @@ var Spinner = spinner.New(
 
 var UserName string
 
+var Token string
+
 type Model[T any] interface {
 	Init() tea.Cmd
 	Update(msg tea.Msg) (T, tea.Cmd)

@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -72,15 +73,22 @@ func ConnectWS(oldConn *websocket.Conn, data signal.Connect) tea.Cmd {
 		q := u.Query()
 		q.Set("senderUserName", common.UserName)
 		if data.IsRoom {
-			q.Set("roomName", url.QueryEscape(data.Value))
+			roomName := data.Value
+			if data.Password != "" {
+				roomName = roomName + ":" + data.Password
+			}
+			q.Set("roomName", url.QueryEscape(roomName))
 		} else {
 			q.Set("recvUserName", url.QueryEscape(data.Value))
 		}
 
 		u.RawQuery = q.Encode()
 
+		header := http.Header{}
+		header.Set("Authorization", "Bearer "+common.Token)
+
 		log.Printf("connecting to %s", u.String())
-		c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		c, _, err := websocket.DefaultDialer.Dial(u.String(), header)
 		if err != nil {
 			log.Println("dial error:", err)
 			return func() tea.Msg {
@@ -110,7 +118,6 @@ func (m *Chat) ReadMessage() tea.Msg {
 	}
 	var data chatMessage
 	err = json.Unmarshal(message, &data)
-
 	if err != nil {
 		return chatError(err)
 	}
@@ -153,6 +160,9 @@ func (m *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 		case "enter":
 			if m.focus && m.connection != nil && !m.loading {
 				val := m.textInput.Value()
+				if val == "" {
+					break
+				}
 				m.textInput.SetValue("")
 				err := m.connection.WriteMessage(websocket.TextMessage, []byte(val))
 				if err != nil {
@@ -171,8 +181,9 @@ func (m *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 		m.data = nil
 		m.error = nil
 		m.loading = true
+		name := strings.Split(msg.Value, ":")[0]
 		if msg.IsRoom {
-			m.title = "Room: " + msg.Value
+			m.title = "Room: " + name
 		} else {
 			m.title = "Chat with: " + msg.Value
 		}
@@ -229,6 +240,9 @@ func (m *Chat) View() string {
 	}
 
 	contentHeight := m.height - 5
+	if contentHeight < 0 {
+		contentHeight = 0
+	}
 
 	if len(text) > contentHeight {
 		if m.offset > len(text)-m.height+5 {
