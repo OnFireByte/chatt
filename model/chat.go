@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,8 +25,9 @@ type (
 )
 
 type chatMessage struct {
-	User    string `json:"user"`
-	Message string `json:"data"`
+	User      string    `json:"user"`
+	Message   string    `json:"data"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 type Chat struct {
@@ -231,7 +233,7 @@ func (m *Chat) View() string {
 
 		if prevUser != v.User {
 			rendered = lipgloss.JoinVertical(lip.Top,
-				lip.NewStyle().Foreground(lip.Color("205")).Bold(true).Render(v.User),
+				lip.NewStyle().Foreground(lip.Color("205")).Bold(true).Render(v.User)+" "+v.Timestamp.Format("15:04"),
 				rendered,
 			)
 		}

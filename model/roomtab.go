@@ -93,7 +93,7 @@ func (m RoomListTab) Update(msg tea.Msg) (RoomListTab, tea.Cmd) {
 
 		switch msg.String() {
 		case "r":
-			if m.focus && m.fetchFunc != nil && !m.textInput.Focused() && !m.roomPasswordInput.Focused() {
+			if m.focus && m.fetchFunc != nil && !m.inputMode {
 				return m, func() tea.Msg {
 					res, err := m.fetchFunc()
 					return RoomListResult{
