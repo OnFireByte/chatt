@@ -233,7 +233,7 @@ func (m *Chat) View() string {
 
 		if prevUser != v.User {
 			rendered = lipgloss.JoinVertical(lip.Top,
-				lip.NewStyle().Foreground(lip.Color("205")).Bold(true).Render(v.User)+" "+v.Timestamp.Format("15:04"),
+				lip.NewStyle().Foreground(lip.Color("205")).Bold(true).Render(v.User)+" "+v.Timestamp.Local().Format("15:04"),
 				rendered,
 			)
 		}
