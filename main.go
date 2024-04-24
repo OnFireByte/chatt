@@ -74,6 +74,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "ctrl+c":
+			m.homeModel.Update(tea.QuitMsg{})
 			return m, tea.Quit
 		}
 		switch m.state {

@@ -192,6 +192,11 @@ func (m *Chat) Update(msg tea.Msg) (*Chat, tea.Cmd) {
 		cmd := ConnectWS(m.connection, msg)
 		cmds = append(cmds, cmd)
 
+	case tea.QuitMsg:
+		if m.connection != nil {
+			m.connection.Close()
+		}
+
 	case chatConn:
 		m.loading = false
 		m.connection = msg
